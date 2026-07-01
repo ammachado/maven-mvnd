@@ -21,8 +21,6 @@ package org.mvndaemon.mvnd.daemon;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
@@ -58,34 +56,17 @@ public class ClientDispatcher implements BuildEventListener {
         final int maxThreads =
                 degreeOfConcurrency == 1 ? 1 : dependencyGraph.computeMaxWidth(degreeOfConcurrency, 1000);
         final List<MavenProject> projects = session.getProjects();
-        final int _90thArtifactIdLengthPercentile = artifactIdLength90thPercentile(projects);
+        final int maxArtifactIdLength = maxArtifactIdLength(projects);
         queue.add(new BuildStarted(
-                getCurrentProject(session).getArtifactId(),
-                projects.size(),
-                maxThreads,
-                _90thArtifactIdLengthPercentile));
+                getCurrentProject(session).getArtifactId(), projects.size(), maxThreads, maxArtifactIdLength));
     }
 
-    static int artifactIdLength90thPercentile(List<MavenProject> projects) {
-        if (projects.size() == 1) {
-            return projects.get(0).getArtifactId().length();
-        }
-        Map<Integer, Integer> frequencyDistribution = new TreeMap<>();
-        for (MavenProject p : projects) {
-            frequencyDistribution.compute(
-                    p.getArtifactId().length(),
-                    (k, v) -> (v == null) ? Integer.valueOf(1) : Integer.valueOf(v.intValue() + 1));
-        }
-        int _90PercCount = Math.round(0.9f * projects.size());
-        int cnt = 0;
-        for (Entry<Integer, Integer> en : frequencyDistribution.entrySet()) {
-            cnt += en.getValue().intValue();
-            if (cnt >= _90PercCount) {
-                return en.getKey().intValue();
-            }
-        }
-        throw new IllegalStateException(
-                "Could not compute the 90th percentile of the projects length from " + projects);
+    static int maxArtifactIdLength(List<MavenProject> projects) {
+        return projects.stream()
+                .map(MavenProject::getArtifactId)
+                .mapToInt(String::length)
+                .max()
+                .orElse(0);
     }
 
     private final Map<String, Boolean> projects = new ConcurrentHashMap<>();
